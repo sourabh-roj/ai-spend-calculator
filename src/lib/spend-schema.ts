@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TOOLNAMES } from "@/types/spend-form";
+import { ToolName } from "@/types/spend-form";
 
 export const spendFormSchema = z.object({
   step1: z.object({
@@ -11,13 +11,13 @@ export const spendFormSchema = z.object({
       .array(
         z.object({
           id: z.string().min(1),
-          tool: z.enum(TOOL_NAMES),
+          tool: z.string(),
           plan: z.enum(["free", "pro", "team", "enterprise", "api_payg", "custom"]),
           seats: z.number().int().min(0),
           monthlySpend: z.number().min(0),
         })
       )
-      .length(8),
+      .length(9), // must match how many tools you default/create
   }),
 });
 
