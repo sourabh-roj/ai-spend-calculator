@@ -1,5 +1,12 @@
+import { Suspense } from "react";
 import { SpendForm } from "@/components/spend-form";
-
+function FormFallback() {
+  return (
+    <div className="card-ui p-6 text-sm text-neutral-600">
+      Loading audit form…
+    </div>
+  );
+}
 export default function HomePage() {
   return (
     <main className="min-h-screen bg-white">
@@ -11,7 +18,6 @@ export default function HomePage() {
           </a>
         </div>
       </header>
-
       <div className="container-shell space-y-12 pb-16 pt-24">
         <section className="space-y-6">
           <h1 className="text-4xl font-extrabold tracking-tight md:text-6xl">Stop Overspending on AI Tools</h1>
@@ -30,27 +36,13 @@ export default function HomePage() {
           </a>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <div className="card-ui bg-blue-50 p-5">
-            <h3 className="font-semibold">Savings analysis</h3>
-            <p className="mt-2 text-sm text-neutral-700">Find plan mismatches and reduce monthly waste.</p>
-          </div>
-          <div className="card-ui bg-amber-50 p-5">
-            <h3 className="font-semibold">Industry benchmarks</h3>
-            <p className="mt-2 text-sm text-neutral-700">Compare spend per developer against a simple baseline.</p>
-          </div>
-          <div className="card-ui bg-emerald-50 p-5">
-            <h3 className="font-semibold">Earn rewards</h3>
-            <p className="mt-2 text-sm text-neutral-700">Share your referral link and earn rewards for completed audits.</p>
-          </div>
-        </section>
-
         <section id="audit" className="space-y-4">
           <h2 className="text-2xl font-bold">Run your audit</h2>
-          <SpendForm />
+          <Suspense fallback={<FormFallback />}>
+            <SpendForm />
+          </Suspense>
         </section>
       </div>
-
       <footer className="border-t border-neutral-200 py-6 text-center text-sm text-neutral-500">
         © {new Date().getFullYear()} BUDGETBHAI
       </footer>

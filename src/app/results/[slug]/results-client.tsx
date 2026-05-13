@@ -27,6 +27,8 @@ interface AuditResult {
   teamSize?: number;
 }
 
+type LoadState = AuditResult | null | undefined;
+
 function badgeClasses(kind: RecommendationType): string {
   if (kind === "keep") return "border-neutral-200 bg-neutral-50 text-neutral-800";
   if (kind === "switch_plan") return "border-amber-200 bg-amber-50 text-amber-900";
@@ -41,10 +43,11 @@ function badgeLabel(kind: RecommendationType): string {
 
 export function ResultsClient({ slug }: { slug: string }) {
   const searchParams = useSearchParams();
+
+  const [result, setResult] = useState<LoadState>(undefined);
   const [copiedCode, setCopiedCode] = useState(false);
   const [shareState, setShareState] = useState<"idle" | "copied">("idle");
 
-  const [result, setResult] = useState<AuditResult | null | undefined>(undefined);
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(RESULTS_STORAGE_KEY);
@@ -57,7 +60,7 @@ export function ResultsClient({ slug }: { slug: string }) {
     } catch {
       setResult(null);
     }
-}, [slug]);
+  }, [slug]);
 
   const industryAvgPerDev = 145;
 
@@ -72,8 +75,7 @@ export function ResultsClient({ slug }: { slug: string }) {
 
   const shareUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
-    const base = window.location.origin;
-    return `${base}/?ref=${encodeURIComponent(referralCode)}`;
+    return `${window.location.origin}/?ref=${encodeURIComponent(referralCode)}`;
   }, [referralCode]);
 
   async function copyReferralCode() {
@@ -104,8 +106,8 @@ export function ResultsClient({ slug }: { slug: string }) {
   if (result === undefined) {
     return (
       <main className="container-shell py-10">
-        <div className="card-ui p-6">
-          <p className="text-sm text-neutral-600">Loading results…</p>
+        <div className="rounded-xl border border-neutral-200 bg-white p-6 text-sm text-neutral-600 shadow-sm">
+          Loading results…
         </div>
       </main>
     );
@@ -114,7 +116,7 @@ export function ResultsClient({ slug }: { slug: string }) {
   if (!result) {
     return (
       <main className="container-shell py-10">
-        <div className="card-ui p-6">
+        <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
           <h1 className="text-xl font-bold">No saved report</h1>
           <p className="mt-2 text-sm text-neutral-600">
             We could not find a report for this link in this browser. Run a new audit from the homepage.
@@ -132,7 +134,7 @@ export function ResultsClient({ slug }: { slug: string }) {
         </div>
       ) : null}
 
-      <section className="card-ui p-6 md:p-8">
+      <section className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm md:p-8">
         <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Savings hero</p>
         <div className="mt-3 grid gap-6 md:grid-cols-2">
           <div>
@@ -150,7 +152,7 @@ export function ResultsClient({ slug }: { slug: string }) {
         </div>
       </section>
 
-      <section className="card-ui p-6 md:p-8">
+      <section className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm md:p-8">
         <h2 className="text-lg font-bold">Industry benchmark</h2>
         <p className="mt-2 text-sm text-neutral-700">
           Your estimated spend per developer:{" "}
@@ -167,30 +169,38 @@ export function ResultsClient({ slug }: { slug: string }) {
       <section className="rounded-xl bg-black p-6 text-white md:p-8">
         <h2 className="text-lg font-bold">Referral rewards</h2>
         <p className="mt-2 text-sm text-neutral-200">
-          Share BUDGETBHAI. Your referral code is the same as your results link slug.
+          Share BUDGETBHAI. Your referral code matches your results slug.
         </p>
 
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
           <code className="w-full truncate rounded-lg bg-neutral-900 px-3 py-2 text-sm sm:max-w-md">
             {referralCode}
           </code>
-          <button type="button" className="btn-black-sm w-full sm:w-auto" onClick={() => void copyReferralCode()}>
+          <button
+            type="button"
+            className="inline-flex h-9 w-full items-center justify-center rounded-md bg-white px-3 text-sm font-medium text-black hover:bg-neutral-200 sm:w-auto"
+            onClick={() => void copyReferralCode()}
+          >
             {copiedCode ? "Copied!" : "Copy code"}
           </button>
         </div>
 
         <p className="mt-3 text-xs text-neutral-300">
-          Share link format: <span className="font-mono">{shareUrl || "…"}</span>
+          Share link: <span className="font-mono">{shareUrl || "…"}</span>
         </p>
       </section>
 
       <div className="flex flex-col gap-3 sm:flex-row">
-        <button type="button" className="btn-black w-full sm:w-auto" onClick={() => void shareToEarn()}>
+        <button
+          type="button"
+          className="inline-flex h-11 w-full items-center justify-center rounded-md bg-black px-4 text-sm font-medium text-white hover:bg-neutral-800 sm:w-auto"
+          onClick={() => void shareToEarn()}
+        >
           {shareState === "copied" ? "Copied!" : "Share to Earn Rewards"}
         </button>
       </div>
 
-      <section className="card-ui p-6 md:p-8">
+      <section className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm md:p-8">
         <h2 className="text-lg font-bold">AI summary</h2>
         <p className="mt-3 text-sm leading-6 text-neutral-700">{result.summary}</p>
       </section>
@@ -199,7 +209,7 @@ export function ResultsClient({ slug }: { slug: string }) {
         <h2 className="text-lg font-bold">Per-tool recommendations</h2>
         <div className="grid gap-4 md:grid-cols-2">
           {result.tools.map((t) => (
-            <article key={`${t.tool}-${t.recommendation}`} className="card-ui p-5">
+            <article key={`${t.tool}-${t.recommendation}`} className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <h3 className="text-base font-semibold">{t.tool}</h3>
                 <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${badgeClasses(t.recommendation)}`}>
@@ -221,23 +231,26 @@ export function ResultsClient({ slug }: { slug: string }) {
       </section>
 
       {result.monthlySavings > 500 ? (
-        <section className="card-ui p-6 md:p-8">
+        <section className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm md:p-8">
           <h2 className="text-lg font-bold">Implementation support</h2>
           <p className="mt-2 text-sm text-neutral-700">
             You are projected to save more than $500/month. If you want help executing vendor changes and renewals, talk
             to our team.
           </p>
-          <button type="button" className="btn-black mt-4">
+          <button
+            type="button"
+            className="mt-4 inline-flex h-11 items-center justify-center rounded-md bg-black px-4 text-sm font-medium text-white hover:bg-neutral-800"
+          >
             Book implementation support
           </button>
         </section>
       ) : null}
 
       {result.monthlySavings < 100 ? (
-        <section className="card-ui p-6 md:p-8">
+        <section className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm md:p-8">
           <h2 className="text-lg font-bold">You are spending well</h2>
           <p className="mt-2 text-sm text-neutral-700">
-            Savings potential is currently low. If you want, bookmark this report and re-run monthly as pricing changes.
+            Savings potential is currently low. Bookmark this report and re-run monthly as pricing changes.
           </p>
         </section>
       ) : null}
