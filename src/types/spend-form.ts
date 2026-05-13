@@ -1,57 +1,53 @@
-export type PrimaryUseCase = "coding" | "writing" | "data" | "research" | "mixed";
+export type UseCase = "coding" | "writing" | "data" | "research" | "mixed";
 
 export type ToolName =
   | "cursor"
-  | "github_copilot"
+  | "copilot"
   | "claude"
   | "chatgpt"
+  | "gemini"
+  | "github_copilot"
+  | "v0_dev"
   | "anthropic_api"
   | "openai_api"
-  | "gemini"
-  | "windsurf";
+  | "gemini_api"
+  | "v0_api";
 
-export type ToolPlan = "free" | "pro" | "team" | "enterprise" | "api_payg" | "custom";
+export type PlanName =
+  | "free"
+  | "hobby"
+  | "starter"
+  | "pro"
+  | "team"
+  | "enterprise"
+  | "plus"
+  | "standard"
+  | "premium";
 
-export interface TeamStep {
-  teamSize: number;
-  primaryUseCase: PrimaryUseCase;
-}
+export type ApiModel =
+  | "claude_opus_4_7"
+  | "gpt_5_5"
+  | "gpt_5_4"
+  | "gpt_5_4_mini"
+  | "gemini_3_1_pro_preview"
+  | "gemini_3_1_flash_lite"
+  | "v0_mini"
+  | "v0_pro"
+  | "v0_max"
+  | "v0_max_fast";
 
-export interface ToolRow {
+export interface ToolInput {
   id: string;
   tool: ToolName;
-  plan: ToolPlan;
+  plan: PlanName;
   seats: number;
   monthlySpend: number;
+  apiModel?: ApiModel;
 }
 
 export interface SpendFormData {
-  step1: TeamStep;
-  step2: {
-    tools: ToolRow[];
-  };
+  teamSize: number;
+  useCase: UseCase;
+  tools: ToolInput[];
+  website?: string; // honeypot
 }
-
-export const TOOL_LABELS: Record<ToolName, string> = {
-  cursor: "Cursor",
-  github_copilot: "GitHub Copilot",
-  claude: "Claude",
-  chatgpt: "ChatGPT",
-  anthropic_api: "Anthropic API",
-  openai_api: "OpenAI API",
-  gemini: "Gemini",
-  windsurf: "Windsurf",
-};
-
-export const TOOL_NAMES: ToolName[] = [
-  "cursor",
-  "github_copilot",
-  "claude",
-  "chatgpt",
-  "anthropic_api",
-  "openai_api",
-  "gemini",
-  "windsurf",
-];
-
-export const PLAN_OPTIONS: ToolPlan[] = ["free", "pro", "team", "enterprise", "api_payg", "custom"];

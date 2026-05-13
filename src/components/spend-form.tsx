@@ -1,215 +1,323 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useFieldArray, useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import type { SpendFormData, ToolPlan } from "@/types/spend-form";
-import { PLAN_OPTIONS, TOOL_LABELS } from "@/types/spend-form";
-import { spendFormSchema } from "@/lib/spend-schema";
-import { defaultSpendFormValues } from "@/lib/defaults";
-import { useLocalStorageForm } from "@/hooks/use-local-storage-form";
-import { buildAuditReport } from "@/lib/audit-engine";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { ApiModel, PlanName, SpendFormData, ToolInput, ToolName } from "@/types/spend-form";
 
-type Step = 1 | 2 | 3;
+const FORM_STORAGE_KEY = "budgetbhai-form-v2";
+const RESULTS_STORAGE_KEY = "budgetbhai-results-v1";
+
+const TOOLS: ToolName[] = [
+  "cursor",
+  "copilot",
+  "claude",
+  "chatgpt",
+  "gemini",
+  "github_copilot",
+  "v0_dev",
+  "anthropic_api",
+  "openai_api",
+  "gemini_api",
+  "v0_api",
+];
+
+const PLAN_OPTIONS: PlanName[] = [
+  "free",
+  "hobby",
+  "starter",
+  "pro",
+  "team",
+  "enterprise",
+  "plus",
+  "standard",
+  "premium",
+];
+
+const API_TOOLS: ToolName[] = ["anthropic_api", "openai_api", "gemini_api", "v0_api"];
+
+const API_MODELS_BY_TOOL: Record<
+  "anthropic_api" | "openai_api" | "gemini_api" | "v0_api",
+  ApiModel[]
+> = {
+  anthropic_api: ["claude_opus_4_7"],
+  openai_api: ["gpt_5_5", "gpt_5_4", "gpt_5_4_mini"],
+  gemini_api: ["gemini_3_1_pro_preview", "gemini_3_1_flash_lite"],
+  v0_api: ["v0_mini", "v0_pro", "v0_max", "v0_max_fast"],
+};
+
+function createToolRow(): ToolInput {
+  return {
+    id: crypto.randomUUID(),
+    tool: "cursor",
+    plan: "pro",
+    seats: 1,
+    monthlySpend: 20,
+    apiModel: undefined,
+  };
+}
+
+function isApiTool(tool: ToolName): tool is "anthropic_api" | "openai_api" | "gemini_api" | "v0_api" {
+  return API_TOOLS.includes(tool);
+}
 
 export function SpendForm() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>(1);
+  const searchParams = useSearchParams();
 
-  const form = useForm<SpendFormData>({
-    resolver: zodResolver(spendFormSchema),
-    mode: "onBlur",
-    defaultValues: defaultSpendFormValues,
+  const [step, setStep] = useState<1 | 2>(1);
+  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState<SpendFormData>({
+    teamSize: 5,
+    useCase: "coding",
+    tools: [createToolRow()],
+    website: "",
   });
 
-  const { clearPersisted } = useLocalStorageForm(form);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(FORM_STORAGE_KEY);
+      if (!raw) return;
+      setForm(JSON.parse(raw) as SpendFormData);
+    } catch {
+      // ignore corrupt drafts
+    }
+  }, []);
 
-  const { fields } = useFieldArray({
-    control: form.control,
-    name: "step2.tools",
-  });
+  useEffect(() => {
+    window.localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(form));
+  }, [form]);
 
-  const watchedTools = useWatch({
-    control: form.control,
-    name: "step2.tools",
-  });
+  const progress = step === 1 ? 50 : 100;
 
-  const totalMonthly = (watchedTools ?? []).reduce((sum, row) => sum + (row?.monthlySpend ?? 0), 0);
+  const totalMonthly = useMemo(
+    () => form.tools.reduce((sum, row) => sum + (Number(row.monthlySpend) || 0), 0),
+    [form.tools]
+  );
 
-  async function next() {
-    if (step === 1) {
-      const ok = await form.trigger(["step1.teamSize", "step1.primaryUseCase"]);
-      if (!ok) return;
-      setStep(2);
+  function updateTool(id: string, patch: Partial<ToolInput>) {
+    setForm((prev) => ({
+      ...prev,
+      tools: prev.tools.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+    }));
+  }
+
+  function onToolChange(id: string, nextTool: ToolName) {
+    if (isApiTool(nextTool)) {
+      const firstModel = API_MODELS_BY_TOOL[nextTool][0];
+      updateTool(id, { tool: nextTool, apiModel: firstModel, plan: "pro" });
+    } else {
+      updateTool(id, { tool: nextTool, apiModel: undefined });
+    }
+  }
+
+  async function getResults() {
+    if (form.website && form.website.trim().length > 0) {
       return;
     }
-    if (step === 2) {
-      const ok = await form.trigger("step2.tools");
-      if (!ok) return;
-      setStep(3);
+
+    if (loading) return;
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/audit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(form),
+      });
+
+      const data = (await res.json()) as {
+        ok?: boolean;
+        slug?: string;
+        result?: unknown;
+      };
+
+      if (!data.ok || !data.slug || data.slug === "blocked" || !data.result) {
+        console.error("Audit response invalid:", data);
+        return;
+      }
+
+      const raw = window.localStorage.getItem(RESULTS_STORAGE_KEY);
+      const map = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+      map[data.slug] = data.result;
+      window.localStorage.setItem(RESULTS_STORAGE_KEY, JSON.stringify(map));
+
+      window.localStorage.removeItem(FORM_STORAGE_KEY);
+
+      const ref = searchParams.get("ref");
+      const suffix = ref ? `?ref=${encodeURIComponent(ref)}` : "";
+      router.push(`/results/${data.slug}${suffix}`);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
-  }
-
-  function prev() {
-    setStep((s) => (s > 1 ? ((s - 1) as Step) : s));
-  }
-
-  function onSubmit(data: SpendFormData) {
-    const slug = crypto.randomUUID();
-    const report = buildAuditReport(data, slug);
-
-    const key = "budgetbhai-reports-v1";
-    const raw = window.localStorage.getItem(key);
-    const existing = raw ? (JSON.parse(raw) as Record<string, typeof report>) : {};
-    existing[slug] = report;
-    window.localStorage.setItem(key, JSON.stringify(existing));
-
-    clearPersisted();
-    router.push(`/results/${slug}`);
   }
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>BudgetBhai - AI Spend Input</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex gap-2">
-            {[1, 2, 3].map((s) => (
-              <span
-                key={s}
-                className={`rounded-full px-3 py-1 text-xs ${step === s ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
-              >
-                Step {s}
-              </span>
-            ))}
+    <div className="card-ui p-4 md:p-6 space-y-5">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-xs text-neutral-500">
+          <span>Step {step} of 2</span>
+          <span>{progress}%</span>
+        </div>
+        <div className="h-2 rounded bg-neutral-100">
+          <div className="h-2 rounded bg-black transition-all duration-300" style={{ width: `${progress}%` }} />
+        </div>
+      </div>
+
+      {step === 1 && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium">Team size</label>
+            <input
+              className="input-ui"
+              type="number"
+              min={1}
+              value={form.teamSize}
+              onChange={(e) => setForm((p) => ({ ...p, teamSize: Number(e.target.value) || 1 }))}
+            />
           </div>
 
-          {step === 1 && (
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="teamSize">Team size</Label>
-                <Input id="teamSize" type="number" min={1} {...form.register("step1.teamSize", { valueAsNumber: true })} />
-              </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Use case</label>
+            <select
+              className="input-ui"
+              value={form.useCase}
+              onChange={(e) => setForm((p) => ({ ...p, useCase: e.target.value as SpendFormData["useCase"] }))}
+            >
+              <option value="coding">Coding</option>
+              <option value="writing">Writing</option>
+              <option value="data">Data</option>
+              <option value="research">Research</option>
+              <option value="mixed">Mixed</option>
+            </select>
+          </div>
 
-              <div>
-                <Label>Primary use case</Label>
-                <Select
-                  value={form.watch("step1.primaryUseCase")}
-                  onValueChange={(v) =>
-                    form.setValue("step1.primaryUseCase", v as SpendFormData["step1"]["primaryUseCase"], {
-                      shouldValidate: true,
-                    })
+          <input
+            type="text"
+            name="bb_hp"
+            className="hidden"
+            tabIndex={-1}
+            autoComplete="off"
+            value={form.website ?? ""}
+            onChange={(e) => setForm((p) => ({ ...p, website: e.target.value }))}
+          />
+
+          <div className="md:col-span-2">
+            <button type="button" className="btn-black h-11 px-5" onClick={() => setStep(2)}>
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-4">
+          {form.tools.length === 0 && (
+            <p className="rounded-md border border-dashed p-4 text-sm text-neutral-500">
+              No tools added yet. Click “Add Tool” to begin.
+            </p>
+          )}
+
+          {form.tools.map((tool) => (
+            <div key={tool.id} className="grid gap-2 rounded-lg border border-neutral-200 p-3 md:grid-cols-12">
+              <select
+                className="input-ui md:col-span-3"
+                value={tool.tool}
+                onChange={(e) => onToolChange(tool.id, e.target.value as ToolName)}
+              >
+                {TOOLS.map((t) => (
+                  <option key={t} value={t}>
+                    {t.replaceAll("_", " ")}
+                  </option>
+                ))}
+              </select>
+
+              {isApiTool(tool.tool) ? (
+                <select
+                  className="input-ui md:col-span-3"
+                  value={tool.apiModel ?? API_MODELS_BY_TOOL[tool.tool][0]}
+                  onChange={(e) => updateTool(tool.id, { apiModel: e.target.value as ApiModel })}
+                >
+                  {API_MODELS_BY_TOOL[tool.tool].map((model) => (
+                    <option key={model} value={model}>
+                      {model.replaceAll("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <select
+                  className="input-ui md:col-span-3"
+                  value={tool.plan}
+                  onChange={(e) =>
+                    updateTool(tool.id, { plan: e.target.value as PlanName, apiModel: undefined })
                   }
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select use case" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="coding">Coding</SelectItem>
-                    <SelectItem value="writing">Writing</SelectItem>
-                    <SelectItem value="data">Data</SelectItem>
-                    <SelectItem value="research">Research</SelectItem>
-                    <SelectItem value="mixed">Mixed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
+                  {PLAN_OPTIONS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              )}
 
-          {step === 2 && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-12 gap-3 text-sm font-medium">
-                <div className="col-span-4">Tool</div>
-                <div className="col-span-3">Plan</div>
-                <div className="col-span-2">Seats</div>
-                <div className="col-span-3">Monthly spend ($)</div>
-              </div>
-              <Separator />
-              {fields.map((field, index) => (
-                <div key={field.id} className="grid grid-cols-12 gap-3 items-center">
-                  <div className="col-span-4">{TOOL_LABELS[field.tool]}</div>
-                  <div className="col-span-3">
-                    <Select
-                      value={watchedTools?.[index]?.plan ?? field.plan}
-                      onValueChange={(v) =>
-                        form.setValue(`step2.tools.${index}.plan`, v as ToolPlan, {
-                          shouldValidate: true,
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PLAN_OPTIONS.map((plan) => (
-                          <SelectItem key={plan} value={plan}>
-                            {plan}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-2">
-                    <Input type="number" min={0} {...form.register(`step2.tools.${index}.seats`, { valueAsNumber: true })} />
-                  </div>
-                  <div className="col-span-3">
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      className="text-right"
-                      {...form.register(`step2.tools.${index}.monthlySpend`, { valueAsNumber: true })}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+              <input
+                className="input-ui md:col-span-2"
+                type="number"
+                min={0}
+                value={tool.seats}
+                onChange={(e) => updateTool(tool.id, { seats: Number(e.target.value) || 0 })}
+              />
 
-          {step === 3 && (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Team size: {form.getValues("step1.teamSize")} | Use case: {form.getValues("step1.primaryUseCase")}
-              </p>
-              <Separator />
-              {(watchedTools ?? []).map((row, i) => (
-                <div key={fields[i]?.id ?? i} className="flex justify-between text-sm">
-                  <span>
-                    {TOOL_LABELS[row.tool]} ({row.plan}) - {row.seats} seats
-                  </span>
-                  <span>${(row.monthlySpend ?? 0).toFixed(2)}</span>
-                </div>
-              ))}
-              <Separator />
-              <div className="font-semibold">Total monthly: ${totalMonthly.toFixed(2)}</div>
-            </div>
-          )}
+              <input
+                className="input-ui md:col-span-3"
+                type="number"
+                min={0}
+                step="0.01"
+                value={tool.monthlySpend}
+                onChange={(e) => updateTool(tool.id, { monthlySpend: Number(e.target.value) || 0 })}
+              />
 
-          <div className="flex gap-2">
-            {step > 1 && (
-              <Button type="button" variant="outline" onClick={prev}>
-                Back
-              </Button>
-            )}
-            {step < 3 ? (
-              <Button type="button" onClick={next}>
-                Next
-              </Button>
-            ) : (
-              <Button type="submit">Submit</Button>
-            )}
+              <button
+                type="button"
+                className="h-11 rounded-md border border-neutral-300 px-3 text-sm hover:bg-neutral-50 md:col-span-1"
+                onClick={() =>
+                  setForm((prev) => ({
+                    ...prev,
+                    tools: prev.tools.filter((x) => x.id !== tool.id),
+                  }))
+                }
+              >
+                Delete
+              </button>
+            </div>
+          ))}
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="h-11 rounded-md border border-neutral-300 px-4 text-sm hover:bg-neutral-50"
+              onClick={() => setForm((p) => ({ ...p, tools: [...p.tools, createToolRow()] }))}
+            >
+              + Add Tool
+            </button>
+
+            <button
+              type="button"
+              className="h-11 rounded-md border border-neutral-300 px-4 text-sm hover:bg-neutral-50"
+              onClick={() => setStep(1)}
+            >
+              Back
+            </button>
+
+            <button type="button" className="btn-black h-11 px-5" disabled={loading} onClick={() => void getResults()}>
+              {loading ? "Processing..." : "Get Results"}
+            </button>
           </div>
-        </CardContent>
-      </Card>
-    </form>
+
+          <p className="text-xs text-neutral-500">Current entered monthly spend: ${totalMonthly.toFixed(2)}</p>
+        </div>
+      )}
+    </div>
   );
 }

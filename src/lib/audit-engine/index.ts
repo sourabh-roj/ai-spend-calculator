@@ -1,91 +1,91 @@
 import type { SpendFormData } from "@/types/spend-form";
 
-export type RecommendedAction =
-  | "keep"
-  | "switch_plan_same_vendor"
-  | "switch_vendor_for_use_case"
-  | "manual_review";
+export type RecommendationType = "keep" | "switch_plan" | "switch_vendor";
 
-export interface ToolAuditResult {
+export interface ToolRecommendation {
   tool: string;
   currentSpend: number;
-  recommendedAction: RecommendedAction;
   projectedSpend: number;
   savings: number;
+  recommendation: RecommendationType;
   reason: string;
 }
 
-export interface AuditReport {
+export interface AuditResult {
   slug: string;
-  currentMonthlySpend: number;
-  projectedMonthlySpend: number;
-  totalSavingsMonthly: number;
-  teamSize: number;
-  primaryUseCase: SpendFormData["step1"]["primaryUseCase"];
-  tools: ToolAuditResult[];
+  currentSpend: number;
+  projectedSpend: number;
+  monthlySavings: number;
+  annualSavings: number;
+  summary: string;
+  tools: ToolRecommendation[];
 }
 
-const codingAlternatives = ["Cursor", "GitHub Copilot", "Windsurf"];
-const mixedAlternatives = ["Claude", "ChatGPT", "Gemini"];
-
-export function buildAuditReport(data: SpendFormData, slug: string): AuditReport {
-  const tools: ToolAuditResult[] = data.step2.tools.map((row) => {
-    const current = row.monthlySpend;
-
+export function runAudit(payload: SpendFormData, slug: string): AuditResult {
+  const tools = payload.tools.map((row): ToolRecommendation => {
+    const current = safeMoney(row.monthlySpend);
     let projected = current;
-    let action: RecommendedAction = "keep";
+    let recommendation: RecommendationType = "keep";
     let reason = "Current setup appears cost-aligned.";
 
-    // 1) Plan-seat fit heuristic
-    if (row.plan === "team" && row.seats <= 1) {
-      projected = current * 0.8;
-      action = "switch_plan_same_vendor";
-      reason = "Team plan with low seats often overpays; consider individual/pro tier.";
-    }
-
-    // 2) Same vendor cheaper heuristic
+    // Simple heuristics
     if (row.plan === "enterprise" && row.seats < 10) {
-      const sameVendorProjected = current * 0.75;
-      if (sameVendorProjected < projected) {
-        projected = sameVendorProjected;
-        action = "switch_plan_same_vendor";
-        reason = "Enterprise tier may be oversized for seat count.";
-      }
-    }
-
-    // 3) Cheaper alternative by use case heuristic
-    const altProjected = current * 0.85;
-    if (altProjected < projected && current > 0) {
-      projected = altProjected;
-      action = "switch_vendor_for_use_case";
-      const altList = data.step1.primaryUseCase === "coding" ? codingAlternatives : mixedAlternatives;
-      reason = `Cheaper alternative for ${data.step1.primaryUseCase} use case likely exists (${altList.join(", ")}).`;
+      projected = current * 0.75;
+      recommendation = "switch_plan";
+      reason = "Enterprise plan may be oversized for current seat count.";
+    } else if (row.plan === "team" && row.seats <= 1) {
+      projected = current * 0.8;
+      recommendation = "switch_plan";
+      reason = "Team plan with low seat count may be over-provisioned.";
+    } else if (current > 0) {
+      projected = current * 0.9;
+      recommendation = "switch_vendor";
+      reason = "A lower-cost alternative may fit your use case better.";
     }
 
     const savings = Math.max(0, current - projected);
 
     return {
-      tool: row.tool,
+      tool: labelTool(row.tool, row.apiModel),
       currentSpend: round2(current),
-      recommendedAction: action,
       projectedSpend: round2(projected),
       savings: round2(savings),
+      recommendation,
       reason,
     };
   });
 
-  const currentMonthlySpend = round2(tools.reduce((s, t) => s + t.currentSpend, 0));
-  const projectedMonthlySpend = round2(tools.reduce((s, t) => s + t.projectedSpend, 0));
+  const currentSpend = round2(tools.reduce((s, t) => s + t.currentSpend, 0));
+  const projectedSpend = round2(tools.reduce((s, t) => s + t.projectedSpend, 0));
+  const monthlySavings = round2(currentSpend - projectedSpend);
+  const annualSavings = round2(monthlySavings * 12);
+
+  const summary = `Your team is currently spending $${currentSpend.toFixed(
+    2
+  )}/month. BudgetBhai estimates potential savings of $${monthlySavings.toFixed(
+    2
+  )}/month by optimizing plans and switching overpriced tools where appropriate.`;
 
   return {
     slug,
-    currentMonthlySpend,
-    projectedMonthlySpend,
-    totalSavingsMonthly: round2(currentMonthlySpend - projectedMonthlySpend),
-    teamSize: data.step1.teamSize,
-    primaryUseCase: data.step1.primaryUseCase,
+    currentSpend,
+    projectedSpend,
+    monthlySavings,
+    annualSavings,
+    summary,
     tools,
   };
+}
+
+function labelTool(tool: string, apiModel?: string): string {
+  const base = tool.replaceAll("_", " ");
+  if (apiModel) return `${base} (${apiModel.replaceAll("_", " ")})`;
+  return base;
+}
+
+function safeMoney(v: number): number {
+  if (!Number.isFinite(v)) return 0;
+  return Math.max(0, v);
 }
 
 function round2(n: number): number {

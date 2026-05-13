@@ -3,16 +3,16 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "BudgetBhai",
-    template: "%s | BudgetBhai",
+    default: "BUDGETBHAI",
+    template: "%s | BUDGETBHAI",
   },
-  description: "AI spend audit and optimization for teams",
+  description: "Audit AI tool spend, benchmark, and unlock savings.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="min-h-screen bg-white text-black antialiased">{children}</body>
     </html>
   );
 }

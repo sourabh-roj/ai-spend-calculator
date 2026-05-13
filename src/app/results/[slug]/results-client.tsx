@@ -1,151 +1,246 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useSearchParams } from "next/navigation";
 
-type RecommendedAction = "keep" | "switch_plan_same_vendor" | "switch_vendor_for_use_case" | "manual_review";
+const RESULTS_STORAGE_KEY = "budgetbhai-results-v1";
 
-type ToolAuditResult = {
+type RecommendationType = "keep" | "switch_plan" | "switch_vendor";
+
+interface ToolRecommendation {
   tool: string;
   currentSpend: number;
-  recommendedAction: RecommendedAction;
   projectedSpend: number;
   savings: number;
+  recommendation: RecommendationType;
   reason: string;
-};
+}
 
-type AuditReport = {
+interface AuditResult {
   slug: string;
-  currentMonthlySpend: number;
-  projectedMonthlySpend: number;
-  totalSavingsMonthly: number;
-  teamSize: number;
-  primaryUseCase: "coding" | "writing" | "data" | "research" | "mixed";
-  tools: ToolAuditResult[];
-};
+  currentSpend: number;
+  projectedSpend: number;
+  monthlySavings: number;
+  annualSavings: number;
+  summary: string;
+  tools: ToolRecommendation[];
+  teamSize?: number;
+}
 
-function actionLabel(action: RecommendedAction): string {
-  if (action === "keep") return "Keep";
-  if (action === "switch_plan_same_vendor") return "Switch plan";
-  if (action === "switch_vendor_for_use_case") return "Switch vendor";
-  return "Manual review";
+function badgeClasses(kind: RecommendationType): string {
+  if (kind === "keep") return "border-neutral-200 bg-neutral-50 text-neutral-800";
+  if (kind === "switch_plan") return "border-amber-200 bg-amber-50 text-amber-900";
+  return "border-emerald-200 bg-emerald-50 text-emerald-900";
+}
+
+function badgeLabel(kind: RecommendationType): string {
+  if (kind === "keep") return "Keep";
+  if (kind === "switch_plan") return "Switch Plan";
+  return "Switch Vendor";
 }
 
 export function ResultsClient({ slug }: { slug: string }) {
-  const [report, setReport] = useState<AuditReport | null>(null);
-  const [summary, setSummary] = useState<string>("Generating personalized summary...");
+  const searchParams = useSearchParams();
+  const [result, setResult] = useState<AuditResult | undefined>(undefined);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [shareState, setShareState] = useState<"idle" | "copied">("idle");
 
   useEffect(() => {
-    const raw = window.localStorage.getItem("budgetbhai-reports-v1");
-    if (!raw) return;
-    const parsed = JSON.parse(raw) as Record<string, AuditReport>;
-    setReport(parsed[slug] ?? null);
+    try {
+      const raw = window.localStorage.getItem(RESULTS_STORAGE_KEY);
+      if (!raw) {
+        setResult(null);
+        return;
+      }
+      const map = JSON.parse(raw) as Record<string, AuditResult>;
+      setResult(map[slug] ?? null);
+    } catch {
+      setResult(null);
+    }
   }, [slug]);
 
-  useEffect(() => {
-    async function loadSummary() {
-      if (!report) return;
-      try {
-        const res = await fetch("/api/summary", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ report }),
+  const industryAvgPerDev = 145;
+
+  const spendPerDev = useMemo(() => {
+    if (!result) return 0;
+    const team = result.teamSize && result.teamSize > 0 ? result.teamSize : 1;
+    return result.currentSpend / team;
+  }, [result]);
+
+  const referralFromUrl = searchParams.get("ref");
+  const referralCode = slug;
+
+  const shareUrl = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    const base = window.location.origin;
+    return `${base}/?ref=${encodeURIComponent(referralCode)}`;
+  }, [referralCode]);
+
+  async function copyReferralCode() {
+    await navigator.clipboard.writeText(referralCode);
+    setCopiedCode(true);
+    window.setTimeout(() => setCopiedCode(false), 1200);
+  }
+
+  async function shareToEarn() {
+    const url = shareUrl;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "BUDGETBHAI",
+          text: "Audit your AI tool spend in minutes.",
+          url,
         });
-        if (!res.ok) throw new Error("summary failed");
-        const data = (await res.json()) as { summary: string };
-        setSummary(data.summary);
-      } catch {
-        setSummary(
-          `BudgetBhai found current spend of $${report.currentMonthlySpend.toFixed(
-            0
-          )}/month with potential savings of $${report.totalSavingsMonthly.toFixed(
-            0
-          )}/month. Prioritize the highest-savings plan changes first, then review remaining tools next billing cycle.`
-        );
+      } else {
+        await navigator.clipboard.writeText(url);
       }
+      setShareState("copied");
+      window.setTimeout(() => setShareState("idle"), 1200);
+    } catch {
+      // user cancelled share
     }
-    loadSummary();
-  }, [report]);
+  }
 
-  const annualSavings = useMemo(() => (report ? report.totalSavingsMonthly * 12 : 0), [report]);
-
-  if (!report) {
+  if (result === undefined) {
     return (
-      <main className="bb-shell py-10">
-        <Card>
-          <CardHeader>
-            <CardTitle>Result not found</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            No report found for this link. Submit the form again.
-          </CardContent>
-        </Card>
+      <main className="container-shell py-10">
+        <div className="card-ui p-6">
+          <p className="text-sm text-neutral-600">Loading results…</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!result) {
+    return (
+      <main className="container-shell py-10">
+        <div className="card-ui p-6">
+          <h1 className="text-xl font-bold">No saved report</h1>
+          <p className="mt-2 text-sm text-neutral-600">
+            We could not find a report for this link in this browser. Run a new audit from the homepage.
+          </p>
+        </div>
       </main>
     );
   }
 
   return (
-    <main className="bb-shell py-10 space-y-8">
-      <section className="bb-hero">
-        <p className="bb-label">Total monthly spend</p>
-        <h1 className="bb-kpi">${report.currentMonthlySpend.toFixed(2)}</h1>
-        <p className="bb-label mt-6">Projected annual savings</p>
-        <p className="text-3xl md:text-5xl font-semibold text-green-600">${annualSavings.toFixed(2)}</p>
+    <main className="container-shell space-y-6 py-8 md:py-10">
+      {referralFromUrl ? (
+        <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
+          Referral detected: <span className="font-mono font-medium">{referralFromUrl}</span>
+        </div>
+      ) : null}
+
+      <section className="card-ui p-6 md:p-8">
+        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Savings hero</p>
+        <div className="mt-3 grid gap-6 md:grid-cols-2">
+          <div>
+            <p className="text-sm text-neutral-600">Current monthly spend</p>
+            <p className="mt-2 text-4xl font-extrabold tracking-tight md:text-5xl">
+              ${result.currentSpend.toFixed(2)}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-neutral-600">Annual savings potential</p>
+            <p className="mt-2 text-4xl font-extrabold tracking-tight text-emerald-700 md:text-5xl">
+              ${result.annualSavings.toFixed(2)}
+            </p>
+          </div>
+        </div>
       </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Personalized Summary</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm leading-6">{summary}</CardContent>
-      </Card>
+      <section className="card-ui p-6 md:p-8">
+        <h2 className="text-lg font-bold">Industry benchmark</h2>
+        <p className="mt-2 text-sm text-neutral-700">
+          Your estimated spend per developer:{" "}
+          <span className="font-semibold">${spendPerDev.toFixed(2)}/dev/month</span>
+        </p>
+        <p className="mt-1 text-sm text-neutral-700">
+          Industry average: <span className="font-semibold">${industryAvgPerDev}/dev/month</span>
+        </p>
+        <p className="mt-3 text-xs text-neutral-500">
+          Benchmark is directional. Actual org spend varies by tooling mix, security requirements, and usage-based APIs.
+        </p>
+      </section>
 
-      <section className="grid gap-4 md:grid-cols-2">
-        {report.tools.map((t) => (
-          <Card key={t.tool}>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>{t.tool}</span>
-                <span className="rounded-full bg-muted px-2.5 py-1 text-xs">{actionLabel(t.recommendedAction)}</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1 text-sm">
-              <p>
-                {`$${t.currentSpend.toFixed(2)} → $${t.projectedSpend.toFixed(2)}`}
+      <section className="rounded-xl bg-black p-6 text-white md:p-8">
+        <h2 className="text-lg font-bold">Referral rewards</h2>
+        <p className="mt-2 text-sm text-neutral-200">
+          Share BUDGETBHAI. Your referral code is the same as your results link slug.
+        </p>
+
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <code className="w-full truncate rounded-lg bg-neutral-900 px-3 py-2 text-sm sm:max-w-md">
+            {referralCode}
+          </code>
+          <button type="button" className="btn-black-sm w-full sm:w-auto" onClick={() => void copyReferralCode()}>
+            {copiedCode ? "Copied!" : "Copy code"}
+          </button>
+        </div>
+
+        <p className="mt-3 text-xs text-neutral-300">
+          Share link format: <span className="font-mono">{shareUrl || "…"}</span>
+        </p>
+      </section>
+
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <button type="button" className="btn-black w-full sm:w-auto" onClick={() => void shareToEarn()}>
+          {shareState === "copied" ? "Copied!" : "Share to Earn Rewards"}
+        </button>
+      </div>
+
+      <section className="card-ui p-6 md:p-8">
+        <h2 className="text-lg font-bold">AI summary</h2>
+        <p className="mt-3 text-sm leading-6 text-neutral-700">{result.summary}</p>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-bold">Per-tool recommendations</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          {result.tools.map((t) => (
+            <article key={`${t.tool}-${t.recommendation}`} className="card-ui p-5">
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="text-base font-semibold">{t.tool}</h3>
+                <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${badgeClasses(t.recommendation)}`}>
+                  {badgeLabel(t.recommendation)}
+                </span>
+              </div>
+
+              <p className="mt-3 text-sm text-neutral-700">
+                Current: <span className="font-semibold">${t.currentSpend.toFixed(2)}</span>
+                <span className="mx-2 text-neutral-400">→</span>
+                Projected: <span className="font-semibold">${t.projectedSpend.toFixed(2)}</span>
               </p>
-              <p className="font-medium text-green-600">${t.savings.toFixed(2)} / mo savings</p>
-              <p className="text-muted-foreground">{t.reason}</p>
-            </CardContent>
-          </Card>
-        ))}
+
+              <p className="mt-2 text-sm font-semibold text-emerald-700">Savings: ${t.savings.toFixed(2)}/mo</p>
+              <p className="mt-3 text-sm text-neutral-600">{t.reason}</p>
+            </article>
+          ))}
+        </div>
       </section>
 
-      {report.totalSavingsMonthly > 500 && (
-        <section className="rounded-2xl border-2 border-green-500 bg-green-50 p-6">
-          <h3 className="text-xl font-semibold">Credex can unlock these savings fast</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            You are leaving more than $500/month on the table. Talk to Credex for implementation.
+      {result.monthlySavings > 500 ? (
+        <section className="card-ui p-6 md:p-8">
+          <h2 className="text-lg font-bold">Implementation support</h2>
+          <p className="mt-2 text-sm text-neutral-700">
+            You are projected to save more than $500/month. If you want help executing vendor changes and renewals, talk
+            to our team.
+          </p>
+          <button type="button" className="btn-black mt-4">
+            Book implementation support
+          </button>
+        </section>
+      ) : null}
+
+      {result.monthlySavings < 100 ? (
+        <section className="card-ui p-6 md:p-8">
+          <h2 className="text-lg font-bold">You are spending well</h2>
+          <p className="mt-2 text-sm text-neutral-700">
+            Savings potential is currently low. If you want, bookmark this report and re-run monthly as pricing changes.
           </p>
         </section>
-      )}
-
-      {report.totalSavingsMonthly < 100 && (
-        <section className="rounded-2xl border p-6">
-          <h3 className="text-xl font-semibold">You're spending well</h3>
-          <p className="mt-1 text-sm text-muted-foreground">Low optimization gap right now. Join notify-me for future pricing shifts.</p>
-          <form className="mt-4 flex gap-2 max-w-md">
-            <input
-              type="email"
-              placeholder="you@company.com"
-              className="h-10 flex-1 rounded-md border px-3 text-sm"
-              required
-            />
-            <button type="submit" className="h-10 rounded-md bg-primary px-4 text-sm text-primary-foreground">
-              Notify me
-            </button>
-          </form>
-        </section>
-      )}
+      ) : null}
     </main>
   );
 }
