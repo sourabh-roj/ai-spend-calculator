@@ -1,39 +1,37 @@
-import type { AuditReport } from "@/lib/audit-engine";
+import type { AuditResult } from "@/lib/audit-engine";
 
-function fallbackSummary(report: AuditReport): string {
-  const tone =
-    report.totalSavingsMonthly > 500
-      ? "You have meaningful savings opportunity and should prioritize highest-spend tools first."
-      : report.totalSavingsMonthly < 100
-        ? "Your spend is already well-optimized; maintain quarterly review."
-        : "There are moderate optimization opportunities worth acting on this month.";
+function fallbackSummary(report: AuditResult): string {
+  const monthly = report.currentSpend ?? 0;
+  const save = report.monthlySavings ?? 0;
+  const annual = report.annualSavings ?? save * 12;
 
-  return `BudgetBhai reviewed your ${report.teamSize}-member team's AI stack. Current spend is $${report.currentMonthlySpend.toFixed(
+  return `BUDGETBHAI reviewed your stack at about $${monthly.toFixed(
     0
-  )}/month with projected savings of about $${report.totalSavingsMonthly.toFixed(
+  )}/month in current spend. We estimate roughly $${save.toFixed(
     0
-  )}/month. ${tone} Focus on plan-rightsizing where seat counts are low and swap overpriced tools for better-fit alternatives by use case. Implement top 2 savings actions first, then track changes over the next billing cycle to confirm realized savings.`;
+  )}/month in savings opportunity ($${annual.toFixed(
+    0
+  )}/year). Start with the highest-savings tool recommendations, then re-check next billing cycle to confirm realized savings.`;
 }
 
-export async function getPersonalizedSummary(report: AuditReport): Promise<string> {
+export async function getPersonalizedSummary(report: AuditResult): Promise<string> {
   try {
-    const key = process.env.ANTHROPIC_API_KEY;
-    if (!key) return fallbackSummary(report);
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return fallbackSummary(report);
 
-    const prompt = `Write ~100 words. Keep concise, practical, and personalized.
-Team size: ${report.teamSize}
-Use case: ${report.primaryUseCase}
-Current monthly spend: ${report.currentMonthlySpend}
-Projected monthly spend: ${report.projectedMonthlySpend}
-Monthly savings: ${report.totalSavingsMonthly}
-Tool audits: ${JSON.stringify(report.tools)}
-Plain text only.`;
+    const prompt = `Write ~100 words. Plain text only. Be specific and practical.
+Team size (if known): ${report.teamSize ?? "unknown"}
+Current monthly spend: ${report.currentSpend}
+Projected monthly spend: ${report.projectedSpend}
+Monthly savings: ${report.monthlySavings}
+Annual savings: ${report.annualSavings}
+Tool recommendations: ${JSON.stringify(report.tools)}`;
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-api-key": key,
+        "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
@@ -47,9 +45,12 @@ Plain text only.`;
 
     if (!res.ok) return fallbackSummary(report);
 
-    const data = await res.json();
-    const text = data?.content?.find((c: { type: string }) => c.type === "text")?.text;
-    return typeof text === "string" && text.trim() ? text.trim() : fallbackSummary(report);
+    const data = (await res.json()) as {
+      content?: Array<{ type: string; text?: string }>;
+    };
+
+    const text = data?.content?.find((c) => c.type === "text")?.text;
+    return typeof text === "string" && text.trim().length > 0 ? text.trim() : fallbackSummary(report);
   } catch {
     return fallbackSummary(report);
   }

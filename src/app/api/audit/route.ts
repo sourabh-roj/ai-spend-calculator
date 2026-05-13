@@ -1,20 +1,13 @@
 import { NextResponse } from "next/server";
-import { runAudit } from "@/lib/audit-engine";
-import type { SpendFormData } from "@/types/spend-form";
+import { getPersonalizedSummary } from "@/lib/anthropic-summary";
+import type { AuditResult } from "@/lib/audit-engine";
 
 export async function POST(req: Request) {
   try {
-    const payload = (await req.json()) as SpendFormData;
-
-    if (payload.website && payload.website.trim().length > 0) {
-      return NextResponse.json({ ok: true, slug: "blocked", result: null }, { status: 200 });
-    }
-
-    const slug = crypto.randomUUID();
-    const result = runAudit(payload, slug);
-
-    return NextResponse.json({ ok: true, slug, result }, { status: 200 });
+    const body = (await req.json()) as { report: AuditResult };
+    const summary = await getPersonalizedSummary(body.report);
+    return NextResponse.json({ summary });
   } catch {
-    return NextResponse.json({ ok: false }, { status: 400 });
+    return NextResponse.json({ summary: "" }, { status: 200 });
   }
 }

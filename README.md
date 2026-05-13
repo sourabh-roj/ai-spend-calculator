@@ -1,7 +1,6 @@
 
 # AI Spend Audit — BUDGETBHAI
-=======
-https://ai-spend-calculator.vercel.app/
+
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
@@ -19,10 +18,6 @@ discounted AI infrastructure credits.
 ---
 
 ## Screenshots
-
-> 📸 Replace the placeholders below with real screenshots before submitting.
-> Minimum 3. Loom or YouTube link also accepted (30-second walkthrough).
-
 | Spend Input Form | Audit Results | Credex CTA (high savings) |
 |---|---|---|
 | ![Form](./docs/screenshots/form.png) | ![Results](./docs/screenshots/results.png) | ![CTA](./docs/screenshots/cta.png) |
