@@ -1,6 +1,6 @@
-import type { SpendFormData, ToolName } from "@/types/spend-form";
+import type { SpendFormData, ToolInput, ToolName } from "@/types/spend-form";
 
-const tools: ToolName[] = [
+const ORDER: ToolName[] = [
   "cursor",
   "github_copilot",
   "claude",
@@ -8,21 +8,21 @@ const tools: ToolName[] = [
   "anthropic_api",
   "openai_api",
   "gemini",
-  "windsurf",
+  "v0_api",
+  "v0_dev",
 ];
 
 export const defaultSpendFormValues: SpendFormData = {
-  step1: {
-    teamSize: 5,
-    primaryUseCase: "coding",
-  },
-  step2: {
-    tools: tools.map((tool, i) => ({
+  teamSize: 5,
+  useCase: "coding",
+  tools: ORDER.map(
+    (tool, i): ToolInput => ({
       id: `${tool}-${i}`,
       tool,
       plan: "pro",
       seats: 0,
       monthlySpend: 0,
-    })),
-  },
+    })
+  ),
+  website: "",
 };
