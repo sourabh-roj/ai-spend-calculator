@@ -41,10 +41,10 @@ function badgeLabel(kind: RecommendationType): string {
 
 export function ResultsClient({ slug }: { slug: string }) {
   const searchParams = useSearchParams();
-  const [result, setResult] = useState<AuditResult | undefined>(undefined);
   const [copiedCode, setCopiedCode] = useState(false);
   const [shareState, setShareState] = useState<"idle" | "copied">("idle");
 
+  const [result, setResult] = useState<AuditResult | null | undefined>(undefined);
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(RESULTS_STORAGE_KEY);
@@ -57,7 +57,7 @@ export function ResultsClient({ slug }: { slug: string }) {
     } catch {
       setResult(null);
     }
-  }, [slug]);
+}, [slug]);
 
   const industryAvgPerDev = 145;
 

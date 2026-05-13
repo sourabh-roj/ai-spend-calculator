@@ -20,7 +20,6 @@ export async function getPersonalizedSummary(report: AuditResult): Promise<strin
     if (!apiKey) return fallbackSummary(report);
 
     const prompt = `Write ~100 words. Plain text only. Be specific and practical.
-Team size (if known): ${report.teamSize ?? "unknown"}
 Current monthly spend: ${report.currentSpend}
 Projected monthly spend: ${report.projectedSpend}
 Monthly savings: ${report.monthlySavings}
