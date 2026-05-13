@@ -6,55 +6,58 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   lint-and-test:
     name: Lint & Test
     runs-on: ubuntu-latest
 
     steps:
-      # ── 1. Checkout ────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Setup Node ──────────────────────────────────────────────────────
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      # ── 3. Install dependencies ────────────────────────────────────────────
       - name: Install dependencies
         run: npm ci
 
-      # ── 4. Type check ──────────────────────────────────────────────────────
       - name: TypeScript type check
         run: npx tsc --noEmit
 
-      # ── 5. Lint ────────────────────────────────────────────────────────────
       - name: ESLint
         run: npm run lint
 
-      # ── 6. Unit tests ──────────────────────────────────────────────────────
       - name: Run tests
-        run: npm test -- --ci --coverage --passWithNoTests
+        run: npm test -- --ci --passWithNoTests
         env:
-          # Stub secrets so tests don't need real values
           ANTHROPIC_API_KEY: test_key_stub
           NEXT_PUBLIC_APP_URL: http://localhost:3000
           SUPABASE_URL: http://localhost:54321
           SUPABASE_SERVICE_ROLE_KEY: test_supabase_stub
 
-      # ── 7. Upload coverage (optional, free on public repos) ────────────────
+      - name: Check coverage folder exists
+        id: coverage-check
+        run: |
+          if [ -d "coverage" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Upload coverage report
-        if: always()
+        if: steps.coverage-check.outputs.exists == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: coverage
           path: coverage/
           retention-days: 7
 
-  # ── Build check (catches broken imports before deploy) ──────────────────────
   build:
     name: Next.js Build Check
     runs-on: ubuntu-latest
@@ -76,7 +79,6 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          # Required by Next.js at build time — stub values are fine for CI
           ANTHROPIC_API_KEY: test_key_stub
           NEXT_PUBLIC_APP_URL: http://localhost:3000
           SUPABASE_URL: http://localhost:54321
