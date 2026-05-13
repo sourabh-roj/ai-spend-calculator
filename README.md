@@ -1,4 +1,10 @@
+<<<<<<< HEAD
 # AI Spend Audit — BUDGETBHAI
+=======
+https://ai-spend-calculator.vercel.app/
+
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+>>>>>>> d3f6a748b4e6d40478b5259c07822df52b49f460
 
 > **Find out where your team is overpaying for AI tools — in 3 minutes, for free.**
 
