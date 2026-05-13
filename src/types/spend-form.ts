@@ -1,9 +1,4 @@
-export type PrimaryUseCase =
-  | "coding"
-  | "writing"
-  | "data"
-  | "research"
-  | "mixed";
+export type PrimaryUseCase = "coding" | "writing" | "data" | "research" | "mixed";
 
 export type ToolName =
   | "cursor"
@@ -15,13 +10,7 @@ export type ToolName =
   | "gemini"
   | "windsurf";
 
-export type ToolPlan =
-  | "free"
-  | "pro"
-  | "team"
-  | "enterprise"
-  | "api_payg"
-  | "custom";
+export type ToolPlan = "free" | "pro" | "team" | "enterprise" | "api_payg" | "custom";
 
 export interface TeamStep {
   teamSize: number;
@@ -65,11 +54,4 @@ export const TOOL_NAMES: ToolName[] = [
   "windsurf",
 ];
 
-export const PLAN_OPTIONS: ToolPlan[] = [
-  "free",
-  "pro",
-  "team",
-  "enterprise",
-  "api_payg",
-  "custom",
-];
+export const PLAN_OPTIONS: ToolPlan[] = ["free", "pro", "team", "enterprise", "api_payg", "custom"];

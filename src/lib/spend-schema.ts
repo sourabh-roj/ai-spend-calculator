@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { TOOL_NAMES } from "@/types/spend-form";
 
-const toolNameEnum = z.enum(TOOL_NAMES);
-const planEnum = z.enum(["free", "pro", "team", "enterprise", "api_payg", "custom"]);
-
 export const spendFormSchema = z.object({
   step1: z.object({
     teamSize: z.number().int().min(1, "Team size must be at least 1"),
@@ -14,8 +11,8 @@ export const spendFormSchema = z.object({
       .array(
         z.object({
           id: z.string().min(1),
-          tool: toolNameEnum,
-          plan: planEnum,
+          tool: z.enum(TOOL_NAMES),
+          plan: z.enum(["free", "pro", "team", "enterprise", "api_payg", "custom"]),
           seats: z.number().int().min(0),
           monthlySpend: z.number().min(0),
         })

@@ -1,4 +1,3 @@
-import { nanoid } from "nanoid";
 import type { SpendFormData, ToolName } from "@/types/spend-form";
 
 const tools: ToolName[] = [
@@ -18,8 +17,8 @@ export const defaultSpendFormValues: SpendFormData = {
     primaryUseCase: "coding",
   },
   step2: {
-    tools: tools.map((tool) => ({
-      id: nanoid(),
+    tools: tools.map((tool, i) => ({
+      id: `${tool}-${i}`,
       tool,
       plan: "pro",
       seats: 0,

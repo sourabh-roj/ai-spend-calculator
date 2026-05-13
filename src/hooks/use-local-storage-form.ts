@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import type { SpendFormData } from "@/types/spend-form";
 
-const STORAGE_KEY = "ai-spend-form-v1";
+const STORAGE_KEY = "budgetbhai-form-v1";
 
 export function useLocalStorageForm(form: UseFormReturn<SpendFormData>) {
   const hydrated = useRef(false);
@@ -12,14 +12,11 @@ export function useLocalStorageForm(form: UseFormReturn<SpendFormData>) {
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        hydrated.current = true;
-        return;
+      if (raw) {
+        const parsed = JSON.parse(raw) as SpendFormData;
+        form.reset(parsed);
       }
-      const parsed = JSON.parse(raw) as SpendFormData;
-      form.reset(parsed);
-      hydrated.current = true;
-    } catch {
+    } finally {
       hydrated.current = true;
     }
   }, [form]);
@@ -32,9 +29,7 @@ export function useLocalStorageForm(form: UseFormReturn<SpendFormData>) {
     return () => sub.unsubscribe();
   }, [form]);
 
-  const clearPersisted = () => {
-    window.localStorage.removeItem(STORAGE_KEY);
+  return {
+    clearPersisted: () => window.localStorage.removeItem(STORAGE_KEY),
   };
-
-  return { clearPersisted };
 }

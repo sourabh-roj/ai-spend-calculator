@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+:root {
+  --bb-bg: 36 33% 98%;
+  --bb-fg: 222 29% 12%;
+  --bb-card: 0 0% 100%;
+  --bb-card-fg: 222 29% 12%;
+  --bb-primary: 159 84% 35%;
+  --bb-primary-fg: 0 0% 100%;
+  --bb-primary-soft: 154 64% 95%;
+  --bb-muted: 220 16% 95%;
+  --bb-muted-fg: 220 10% 40%;
+  --bb-border: 214 21% 88%;
+}
+
+@theme inline {
+  --color-background: hsl(var(--bb-bg));
+  --color-foreground: hsl(var(--bb-fg));
+  --color-card: hsl(var(--bb-card));
+  --color-card-foreground: hsl(var(--bb-card-fg));
+  --color-primary: hsl(var(--bb-primary));
+  --color-primary-foreground: hsl(var(--bb-primary-fg));
+  --color-muted: hsl(var(--bb-muted));
+  --color-muted-foreground: hsl(var(--bb-muted-fg));
+  --color-border: hsl(var(--bb-border));
+}
+
+* {
+  border-color: hsl(var(--bb-border));
+}
+
+html,
+body {
+  background: hsl(var(--bb-bg));
+  color: hsl(var(--bb-fg));
+}
+
+@layer utilities {
+  .bb-shell {
+    @apply mx-auto w-full max-w-6xl px-4 md:px-6 lg:px-8;
+  }
+
+  .bb-hero {
+    @apply rounded-3xl border p-6 md:p-10 shadow-sm;
+    background: linear-gradient(135deg, hsl(var(--bb-primary-soft)), hsl(var(--bb-card)));
+  }
+
+  .bb-kpi {
+    @apply text-3xl md:text-5xl font-bold tracking-tight;
+  }
+
+  .bb-label {
+    @apply text-xs md:text-sm text-muted-foreground uppercase tracking-wide;
+  }
+}
