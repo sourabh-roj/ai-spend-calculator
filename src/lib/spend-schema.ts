@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TOOL_NAMES } from "@/types/spend-form";
+import { TOOLNAMES } from "@/types/spend-form";
 
 export const spendFormSchema = z.object({
   step1: z.object({
