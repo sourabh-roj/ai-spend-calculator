@@ -49,17 +49,28 @@ export function ResultsClient({ slug }: { slug: string }) {
   const [shareState, setShareState] = useState<"idle" | "copied">("idle");
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(RESULTS_STORAGE_KEY);
-      if (!raw) {
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
+
+      try {
+        const raw = window.localStorage.getItem(RESULTS_STORAGE_KEY);
+        if (!raw) {
+          setResult(null);
+          return;
+        }
+
+        const map = JSON.parse(raw) as Record<string, AuditResult>;
+        setResult(map[slug] ?? null);
+      } catch {
         setResult(null);
-        return;
       }
-      const map = JSON.parse(raw) as Record<string, AuditResult>;
-      setResult(map[slug] ?? null);
-    } catch {
-      setResult(null);
-    }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   const industryAvgPerDev = 145;
@@ -209,10 +220,15 @@ export function ResultsClient({ slug }: { slug: string }) {
         <h2 className="text-lg font-bold">Per-tool recommendations</h2>
         <div className="grid gap-4 md:grid-cols-2">
           {result.tools.map((t) => (
-            <article key={`${t.tool}-${t.recommendation}`} className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
+            <article
+              key={`${t.tool}-${t.recommendation}`}
+              className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm"
+            >
               <div className="flex items-start justify-between gap-3">
                 <h3 className="text-base font-semibold">{t.tool}</h3>
-                <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${badgeClasses(t.recommendation)}`}>
+                <span
+                  className={`rounded-full border px-2.5 py-1 text-xs font-medium ${badgeClasses(t.recommendation)}`}
+                >
                   {badgeLabel(t.recommendation)}
                 </span>
               </div>

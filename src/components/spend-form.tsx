@@ -42,8 +42,7 @@ const API_MODELS_BY_TOOL: Record<
   anthropic_api: ["claude_opus_4_7"],
   openai_api: ["gpt_5_5", "gpt_5_4", "gpt_5_4_mini"],
   gemini_api: ["gemini_3_1_pro_preview", "gemini_3_1_flash_lite"],
-  v0_api: ["v0_mini", "v0_pro", "v0_max", "v0_max_fast"],
-};
+  v0_api: ["v0_mini", "v0_pro", "v0_max", "v0_max_fast"],};
 
 function createToolRow(): ToolInput {
   return {
@@ -74,13 +73,23 @@ export function SpendForm() {
   });
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(FORM_STORAGE_KEY);
-      if (!raw) return;
-      setForm(JSON.parse(raw) as SpendFormData);
-    } catch {
-      // ignore corrupt drafts
-    }
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
+
+      try {
+        const raw = window.localStorage.getItem(FORM_STORAGE_KEY);
+        if (!raw) return;
+        setForm(JSON.parse(raw) as SpendFormData);
+      } catch {
+        // ignore corrupt drafts
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -111,13 +120,10 @@ export function SpendForm() {
   }
 
   async function getResults() {
-    if (form.website && form.website.trim().length > 0) {
-      return;
-    }
-
+    if (form.website && form.website.trim().length > 0) return;
     if (loading) return;
-    setLoading(true);
 
+    setLoading(true);
     try {
       const res = await fetch("/api/audit", {
         method: "POST",
@@ -154,7 +160,7 @@ export function SpendForm() {
   }
 
   return (
-    <div className="card-ui p-4 md:p-6 space-y-5">
+    <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm md:p-6 space-y-5">
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs text-neutral-500">
           <span>Step {step} of 2</span>
