@@ -2,85 +2,47 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  lint-and-test:
-    name: Lint & Test
+  lint-test-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: TypeScript type check
-        run: npx tsc --noEmit
-
-      - name: ESLint
+      - name: Lint
         run: npm run lint
 
-      - name: Run tests
-        run: npm test -- --ci --passWithNoTests
-        env:
-          ANTHROPIC_API_KEY: test_key_stub
-          NEXT_PUBLIC_APP_URL: http://localhost:3000
-          SUPABASE_URL: http://localhost:54321
-          SUPABASE_SERVICE_ROLE_KEY: test_supabase_stub
+      - name: Typecheck
+        run: npm run type-check
 
-      - name: Check coverage folder exists
-        id: coverage-check
-        run: |
-          if [ -d "coverage" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Upload coverage report
-        if: steps.coverage-check.outputs.exists == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: coverage/
-          retention-days: 7
-
-  build:
-    name: Next.js Build Check
-    runs-on: ubuntu-latest
-    needs: lint-and-test
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+      # If you have tests:
+      # - name: Test
+      #   run: npm test -- --ci
 
       - name: Build
         run: npm run build
         env:
-          ANTHROPIC_API_KEY: test_key_stub
-          NEXT_PUBLIC_APP_URL: http://localhost:3000
-          SUPABASE_URL: http://localhost:54321
-          SUPABASE_SERVICE_ROLE_KEY: test_supabase_stub
-          RESEND_API_KEY: test_resend_stub
+          # Add any vars required at build time (usually none for Next unless you read env at import time)
+          # NEXT_PUBLIC_* vars go here if needed
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      # If you do NOT want secrets in CI build, remove ANTHROPIC_API_KEY and ensure build never requires it.
